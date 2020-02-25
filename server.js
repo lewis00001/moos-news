@@ -46,7 +46,8 @@ app.get("/gatherNews", function (req, res) {
             result.author = $(this)
                 .children(".article-meta").children(".launch-author").children("a").text();
 
-            // Create a new Article using the `result` object built from scraping
+            // Create a new Article using the `result` object built from scraping if it is not
+            // already in the db (headline set to unique)
             db.newsArticle.create(result)
                 .then(function (newsArticle) {
                     console.log(newsArticle);
@@ -58,6 +59,17 @@ app.get("/gatherNews", function (req, res) {
         });
         // Send a message to the client
         res.send("Launch articles gathered");
+    });
+});
+
+app.get("/all", function(req, res) {
+    db.newsArticle.find({}, function(err, res) {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            console.log(res);
+        }
     });
 });
 
