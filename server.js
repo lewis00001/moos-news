@@ -1,79 +1,116 @@
 var express = require("express");
+var exphbs = require("express-handlebars");
 var logger = require("morgan");
 var mongoose = require("mongoose");
-
 var axios = require("axios");
 var cheerio = require("cheerio");
+var db = require("./models")
 
-// js models
-var db = require("./models");
-
-var PORT = 3000;
+var port = process.env.PORT || 3010;
 
 var app = express();
 
-// middleware
-app.use(logger("dev"));
-// Parse request body as JSON
-app.use(express.urlencoded({
-    extended: true
-}));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
+// Make public a static folder
 app.use(express.static("public"));
 
-// Connect to the Mongo DB
-mongoose.connect("mongodb://localhost/spacenews", {
-    useNewUrlParser: true
+app.engine("handlebars", exphbs({ defaultLayout: "main" }));
+app.set("view engine", "handlebars");
+app.set('index', __dirname + '/views');
+
+// If deployed, use the deployed database. Otherwise use the local mongoHeadlines database
+var MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost/spacenews";
+
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true });
+var results = [];
+
+// Start routes here...
+app.get("/", function (req, res) {
+    db.Article.find({ saved: false }, function (err, result) {
+        if (err) throw err;
+        res.render("index", { result });
+    });
 });
+app.get("/newscrape", function (req, res) {
+    axios.get("https://spacenews.com/section/launch-section/").then(function (response) {
+        var $ = cheerio.load(response.data);
+            $(".launch-article").each(function (i, element) {
+                let headline = $(this)
+                    .children(".article-meta").children(".launch-title").children("a").text();
+                let summary = $(this)
+                    .children(".article-meta").children(".post-excerpt").text();
+                let link = $(this)
+                    .children(".article-meta").children(".launch-title").children("a").attr("href");
+                let author = $(this)
+                    .children(".article-meta").children(".launch-author").children("a").text();
 
-// routes
-// scraper connection
-app.get("/gatherNews", function (req, res) {
-    axios.get("https://spacenews.com/section/launch-section/").then(function (res) {
-        var $ = cheerio.load(res.data);
-
-        $(".launch-article").each(function (i, element) {
-            // result object
-            var result = {};
-
-            result.headline = $(this)
-                .children(".article-meta").children(".launch-title").children("a").text();
-            result.summary = $(this)
-                .children(".article-meta").children(".post-excerpt").text();
-            result.url = $(this)
-                .children(".article-meta").children(".launch-title").children("a").attr("href");
-            result.author = $(this)
-                .children(".article-meta").children(".launch-author").children("a").text();
-
-            // Create a new Article using the `result` object built from scraping if it is not
-            // already in the db (headline set to unique)
-            db.newsArticle.create(result)
-                .then(function (newsArticle) {
-                    console.log(newsArticle);
-                })
-                .catch(function (err) {
-                    // If an error occurred, log it
-                    console.log(err);
+            if (headline && summary && link && author) {
+                results.push({
+                    headline: headline,
+                    summary: summary,
+                    link: link,
+                    author: author
                 });
+            }
         });
-        // Send a message to the client
-        res.send("Launch articles gathered");
+        db.Article.create(results)
+            .then(function (dbArticle) {
+                res.render("index", { dbArticle });
+                console.log(dbArticle);
+            })
+            .catch(function (err) {
+                console.log(err);
+            });
+        app.get("/", function (req, res) {
+            res.render("index");
+        });
     });
 });
 
-app.get("/all", function(req, res) {
-    db.newsArticle.find({}, function(err, res) {
-        if (err) {
-            console.log(err);
-        }
-        else {
-            console.log(res);
+app.put("/update/:id", function (req, res) {
+    db.Article.updateOne({ _id: req.params.id }, { $set: { saved: true } }, function (err, result) {
+        if (result.changedRows == 0) {
+            return res.status(404).end();
+        } else {
+            res.status(200).end();
         }
     });
 });
 
-// Start the server
-app.listen(PORT, function () {
-    console.log("App running on port " + PORT + "!");
+app.put("/newnote/:id", function(req, res) {
+    console.log("*** note added ***");
+    console.log(req.body._id);
+    console.log(req.body.note);
+    db.Article.updateOne({ _id: req.body._id }, { $push: { note: req.body.note }}, function(err, result) {
+        if (result.changedRows === 0) {
+            return res.status(404).end();
+        } else {
+            res.status(200).end();
+        } 
+    });
+});
+
+app.get("/saved", function (req, res) {
+    var savedArticles = [];
+    db.Article.find({ saved: true }, function (err, saved) {
+        if (err) throw err;
+        savedArticles.push(saved)
+        res.render("saved", { saved })
+    });
+});
+
+app.put("/unsave/:id", function(req, res) {
+    console.log("*** removed from saved ***");
+    db.Article.updateOne({ _id: req.params.id }, { $set: { saved: false }}, function(err, result) {
+        if (result.changedRows == 0) {
+            return res.status(404).end();
+        } else {
+            res.status(200).end();
+        }
+    });
+});
+
+app.listen(port, function () {
+    console.log("Server listening on: http://localhost:" + port);
 });

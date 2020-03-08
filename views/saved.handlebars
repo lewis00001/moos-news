@@ -1,0 +1,94 @@
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <img class="mooslogo" src="images/moos.png" alt="moos logo">
+        </div>
+        <div class="col-md-12" id="titleDiv">
+            <h1 id="title">Moos News</h1>
+        </div>
+    </div>
+    <div class="row" class="linkRow">
+        <div class="col-md-4">
+            <a href="/" class="upper-link">HOME</a>
+        </div>
+        <div class="col-md-4">
+            <h2 id="savedTop">SAVED</h2>
+        </div>
+        <div class="col-md-4">
+            <a href="https://spacenews.com/segment/news/" class="upper-link" target="_blank">SPACENEWS.COM</a>
+        </div>
+    </div>
+    <hr>
+
+    {{#each saved}}
+    <div class="row article">
+        <div class="col-md-6" id="saved">
+
+            <h2 class="headline">{{headline}}</h2>
+            <h6 class="author">Author: {{author}}</h6>
+            <div class="summary">{{summary}}</div>
+            <hr>
+            <div class="row" id="bottom-row">
+                <div class="col-md-6">
+                    <a href={{link}} class="link" target="_blank">VIEW ARTICLE</a>
+                </div>
+                <div class="col-md-6">
+                    <form action="/unsave" method="PUT" id="delete-article">
+                        <input type="hidden" name="id" value={{_id}}>
+                        <button class="btn btn-lg" id="deleteBtn" type="submit">DELETE</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6" id="newNoteDiv">
+            <form action="/newnote" method="PUT" id="new-note">
+                <input type="hidden" name="id" value={{_id}}>
+                <input type="name" class="form-control" id="message" placeholder="Add a note ...">
+                <button class="btn btn-lg" id="noteBtn" type="submit">SUBMIT</button>
+            </form>
+            <div id="noteDiv">
+                <h3 class="savedHeader">Saved Notes</h3>
+                <hr>
+                <ul>
+                    {{#each note}}
+                    <li>{{this}}</li>
+                    {{/each}}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {{/each}}
+</div>
+
+<script>
+    $(document).ready(function () {
+        $("#new-note").on("submit", function (event) {
+            event.preventDefault();
+            var id = $(this).children().val();
+            var newNote = $(this).children("#message").val();
+            var data = {
+                _id: id,
+                note: newNote
+            }
+            $.ajax({
+                type: "PUT",
+                url: "/newnote/" + id,
+                data: data
+            })
+            location.reload();
+            $("#message").val("");
+        });
+        $("#delete-article").on("click", function (event) {
+            event.preventDefault();
+            var id = $(this).children().val();
+            var data = {
+                _id: id
+            }
+            $.ajax("/unsave/" + id, {
+                type: "PUT",
+                data: data
+            })
+            location.reload();
+        });
+    });
+</script>
